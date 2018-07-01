@@ -19,7 +19,7 @@
               </button>
             </section>
             <section class="login_verification">
-              <input type="tel" maxlength="8" placeholder="验证码">
+              <input type="tel" maxlength="8" placeholder="验证码" v-model="code">
             </section>
             <section class="login_hint">
               温馨提示：未注册硅谷外卖帐号的手机号，登录时将自动注册，且代表已同意
@@ -29,7 +29,7 @@
           <div :class="{on:!loginWay}">
             <section>
               <section class="login_message">
-                <input type="tel" maxlength="11" placeholder="手机/邮箱/用户名">
+                <input type="tel" maxlength="11" placeholder="手机/邮箱/用户名" v-model="name">
               </section>
               <section class="login_verification">
                 <input type="text" maxlength="8" placeholder="密码" v-if="showPwd" v-model="pwd">
@@ -40,8 +40,9 @@
                 </div>
               </section>
               <section class="login_message">
-                <input type="text" maxlength="11" placeholder="验证码">
-                <img class="get_verification" src="./images/captcha.svg" alt="captcha">
+                <input type="text" maxlength="11" placeholder="验证码" v-model="captcha">
+                <img class="get_verification" src="http://localhost:4000/captcha" alt="captcha"
+                @click="getCaptcha" ref="captcha">
               </section>
             </section>
           </div>
@@ -56,6 +57,8 @@
   </section>
 </template>
 <script>
+  import {reqSendCode, reqSmsLogin, reqPwdLogin} from '../../api'
+
     export default {
       data(){
         return {
@@ -63,7 +66,10 @@
           computeTime:0,
           showPwd:false,
           pwd:'',
-          phone:''
+          name:'',
+          code:'',
+          phone:'',
+          captcha:''
         }
       },
       computed: {
@@ -72,8 +78,52 @@
         }
       },
       methods: {
-        login(){
+       async login(){
+          let result
+          if(this.loginWay){
+            const {rightPhone,phone,code} = this
+            if(!phone){
+              alert("手机号不能为空")
+              return
+            }else if(!this.rightPhone){
+              alert("手机号不合法")
+              return
+            }else if(!/^\d{6}$/.test(code)){
+              alert("验证码不能为空")
+              return
+            }
+            // 发送ajax请求短信登陆
+            result = await reqSmsLogin(phone, code)
+          }else{
+            const {name,pwd,captcha} = this
+            if(!name){
+              alert("用户名不能为空")
+              return
+            }else if(!pwd){
+              alert("密码不合法")
+              return
+            }else if(!captcha){
+              alert("验证码不能为空")
+              return
+            }
+            // 发送ajax请求密码登陆
+            result = await reqPwdLogin({name, pwd, captcha})
+          }
 
+          // 根据结果数据处理
+          if(result.code===0) {
+            const user = result.data
+            // 将user保存到vuex的state
+            this.$store.dispatch('recordUser', user)
+            // 去个人中心界面
+            this.$router.replace('/profile')
+          } else {
+            // 显示新的图片验证码
+            this.getCaptcha()
+            // 显示警告提示
+            const msg = result.msg
+            this.showAlert(msg)
+          }
         },
         getCode(){
           if(!this.computeTime){
@@ -85,6 +135,9 @@
               }
             },1000)
           }
+        },
+        getCaptcha(event){
+          this.$refs.captcha.src='http://localhost:4000/captcha?time='+Date.now()
         }
       }
     }
